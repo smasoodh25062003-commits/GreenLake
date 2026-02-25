@@ -27,9 +27,9 @@ def greenlake_tools():
 def device_management():
     return send_from_directory(BASE_DIR, 'DeviceManagement.html')
 
-@app.route('/SubscriptionManagement.html')
+@app.route('/Subscriptionmanagement.html')
 def subscription_management():
-    return send_from_directory(BASE_DIR, 'SubscriptionManagement.html')
+    return send_from_directory(BASE_DIR, 'Subscriptionmanagement.html')
 
 
 if __name__ == "__main__":
