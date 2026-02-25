@@ -1,0 +1,1725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HPE GreenLake — Platform Tools</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --hpe-green:      #01a982;
+      --hpe-green-dim:  #00856a;
+      --hpe-green-glow: rgba(1,169,130,0.18);
+      --hpe-cyan:       #00c8ff;
+      --hpe-cyan-glow:  rgba(0,200,255,0.15);
+      --hpe-purple:     #7630ea;
+      --black:          #050810;
+      --surface:        #0b0f1a;
+      --panel:          #0f1424;
+      --panel-alt:      #131828;
+      --border:         rgba(255,255,255,0.07);
+      --border-bright:  rgba(255,255,255,0.14);
+      --text:           #f0f4ff;
+      --text-secondary: #a8b4cc;
+      --muted:          #5a6580;
+      --white:          #ffffff;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--black);
+      color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    /* ─── CANVAS BACKGROUND ─────────────────────────────────────────── */
+    #bg-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ─── AURORA BLOBS ──────────────────────────────────────────────── */
+    .aurora {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .aurora-blob {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0;
+      animation: blobPulse 12s ease-in-out infinite;
+    }
+    .aurora-blob:nth-child(1) {
+      width: 700px; height: 700px;
+      background: radial-gradient(circle, rgba(1,169,130,0.22) 0%, transparent 70%);
+      top: -200px; left: -200px;
+      animation-delay: 0s; animation-duration: 14s;
+    }
+    .aurora-blob:nth-child(2) {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(0,200,255,0.15) 0%, transparent 70%);
+      top: 40%; right: -100px;
+      animation-delay: 3s; animation-duration: 18s;
+    }
+    .aurora-blob:nth-child(3) {
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(118,48,234,0.12) 0%, transparent 70%);
+      bottom: -150px; left: 30%;
+      animation-delay: 6s; animation-duration: 16s;
+    }
+    @keyframes blobPulse {
+      0%   { opacity: 0; transform: scale(0.9) translate(0,0); }
+      25%  { opacity: 1; }
+      50%  { opacity: 0.7; transform: scale(1.05) translate(30px,-20px); }
+      75%  { opacity: 1; }
+      100% { opacity: 0; transform: scale(0.9) translate(0,0); }
+    }
+
+    /* ─── GRID OVERLAY ──────────────────────────────────────────────── */
+    .grid-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 60px 60px;
+      mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%);
+    }
+
+    /* ─── NOISE TEXTURE ─────────────────────────────────────────────── */
+    .noise {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    }
+
+    /* ─── HEADER ────────────────────────────────────────────────────── */
+    .header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      height: 68px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 48px;
+      transition: all 0.4s ease;
+    }
+    .header::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(5, 8, 16, 0.6);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border-bottom: 1px solid var(--border);
+      z-index: -1;
+      transition: background 0.4s ease;
+    }
+    .header.scrolled::before {
+      background: rgba(5, 8, 16, 0.88);
+      border-bottom-color: var(--border-bright);
+    }
+
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .hpe-badge {
+      position: relative;
+      width: 38px; height: 38px;
+      background: var(--hpe-green);
+      display: flex; align-items: center; justify-content: center;
+      clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+      transition: transform 0.3s ease;
+    }
+    .logo-area:hover .hpe-badge { transform: rotate(30deg) scale(1.1); }
+    .hpe-badge svg { color: #000; }
+
+    .logo-text-group { display: flex; flex-direction: column; gap: 1px; }
+    .logo-eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--hpe-green);
+    }
+    .logo-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.03em;
+    }
+    .logo-name em { color: var(--hpe-green); font-style: normal; }
+
+    .header-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .nav-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      background: transparent;
+      transition: all 0.3s ease;
+    }
+    .nav-pill:hover {
+      border-color: var(--hpe-green);
+      color: var(--hpe-green);
+      background: var(--hpe-green-glow);
+    }
+    .status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--hpe-green);
+      animation: statusPulse 2s ease-in-out infinite;
+    }
+    @keyframes statusPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(1,169,130,0.7); }
+      50% { box-shadow: 0 0 0 4px rgba(1,169,130,0); }
+    }
+
+    /* ─── HERO ──────────────────────────────────────────────────────── */
+    .hero {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 120px 48px 80px;
+      text-align: center;
+      overflow: hidden;
+    }
+
+    .hero-overline {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 20px;
+      border-radius: 100px;
+      border: 1px solid rgba(1,169,130,0.35);
+      background: rgba(1,169,130,0.08);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--hpe-green);
+      margin-bottom: 32px;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: heroIn 0.7s cubic-bezier(0.22,1,0.36,1) 0.2s forwards;
+    }
+    .hero-overline-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--hpe-green);
+    }
+
+    .hero-title {
+      font-size: clamp(52px, 7vw, 96px);
+      font-weight: 900;
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+      margin-bottom: 28px;
+      opacity: 0;
+      transform: translateY(30px);
+      animation: heroIn 0.8s cubic-bezier(0.22,1,0.36,1) 0.35s forwards;
+    }
+    .hero-title .line-1 { display: block; color: var(--text); }
+    .hero-title .line-2 {
+      display: block;
+      background: linear-gradient(135deg, var(--hpe-green) 0%, var(--hpe-cyan) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-title .line-3 { display: block; color: var(--text-secondary); font-weight: 300; }
+
+    .hero-sub {
+      max-width: 560px;
+      font-size: 18px;
+      line-height: 1.7;
+      color: var(--text-secondary);
+      font-weight: 400;
+      margin-bottom: 56px;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: heroIn 0.8s cubic-bezier(0.22,1,0.36,1) 0.5s forwards;
+    }
+
+    @keyframes heroIn {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .hero-cta {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      opacity: 0;
+      animation: heroIn 0.8s cubic-bezier(0.22,1,0.36,1) 0.65s forwards;
+    }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 32px;
+      background: var(--hpe-green);
+      color: #000;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 50%);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .btn-primary:hover::before { opacity: 1; }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 40px rgba(1,169,130,0.4);
+    }
+    .btn-ghost {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-weight: 500;
+      border: 1px solid var(--border-bright);
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.3s ease;
+    }
+    .btn-ghost:hover {
+      border-color: var(--hpe-green);
+      color: var(--hpe-green);
+      background: var(--hpe-green-glow);
+    }
+
+    /* ─── STEPS GUIDE ────────────────────────────────────────────────── */
+    .steps-section {
+      position: relative;
+      z-index: 1;
+      padding: 80px 48px 0;
+    }
+    .steps-wrapper { max-width: 1240px; margin: 0 auto; }
+
+    .steps-head {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+    .steps-overline {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.26em;
+      text-transform: uppercase;
+      color: var(--hpe-green);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+    }
+    .steps-overline::before,
+    .steps-overline::after {
+      content: '';
+      flex: 1;
+      max-width: 80px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--hpe-green));
+    }
+    .steps-overline::after { background: linear-gradient(90deg, var(--hpe-green), transparent); }
+    .steps-title {
+      font-size: clamp(30px, 4vw, 48px);
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      color: var(--text);
+      line-height: 1.08;
+      margin-bottom: 14px;
+    }
+    .steps-title em { font-style: normal; color: var(--hpe-green); }
+    .steps-subtitle {
+      font-size: 15px;
+      color: var(--text-secondary);
+      max-width: 480px;
+      margin: 0 auto;
+      line-height: 1.75;
+    }
+
+    /* Grid + connector */
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      position: relative;
+      align-items: start;
+    }
+    .steps-connector {
+      position: absolute;
+      top: 28px;
+      left: calc(33.33% + 12px);
+      right: calc(33.33% + 12px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .connector-line {
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(1,169,130,0.5), rgba(0,200,255,0.5));
+      position: relative;
+    }
+    .connector-line::after {
+      content: '▶';
+      position: absolute;
+      right: -6px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 9px;
+      color: rgba(0,200,255,0.6);
+      line-height: 1;
+    }
+
+    /* ── STEP CARD ── */
+    .step-card {
+      position: relative;
+      z-index: 1;
+      border-radius: 22px;
+      overflow: hidden;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      transition: transform 0.45s cubic-bezier(0.22,1,0.36,1),
+                  box-shadow 0.45s ease,
+                  border-color 0.3s ease;
+      /* entrance animation */
+      opacity: 0;
+      transform: translateY(50px) scale(0.97);
+    }
+    .step-card.step-visible {
+      animation: stepCardIn 0.7s cubic-bezier(0.22,1,0.36,1) forwards;
+    }
+    .step-card:nth-child(2).step-visible { animation-delay: 0.12s; }
+    .step-card:nth-child(3).step-visible { animation-delay: 0.24s; }
+    @keyframes stepCardIn {
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* Hover lift + glow */
+    .step-card:hover {
+      transform: translateY(-10px) scale(1.012);
+      border-color: rgba(1,169,130,0.5);
+      box-shadow:
+        0 0 0 1px rgba(1,169,130,0.15),
+        0 30px 70px rgba(0,0,0,0.55),
+        0 0 60px rgba(1,169,130,0.06) inset;
+    }
+    .step-card:nth-child(2):hover {
+      border-color: rgba(0,200,255,0.5);
+      box-shadow:
+        0 0 0 1px rgba(0,200,255,0.12),
+        0 30px 70px rgba(0,0,0,0.55),
+        0 0 60px rgba(0,200,255,0.05) inset;
+    }
+    .step-card:nth-child(3):hover {
+      border-color: rgba(118,48,234,0.45);
+      box-shadow:
+        0 0 0 1px rgba(118,48,234,0.1),
+        0 30px 70px rgba(0,0,0,0.55);
+    }
+
+    /* Moving spotlight on hover */
+    .step-card .step-spotlight {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      z-index: 0;
+      background: radial-gradient(circle 180px at var(--mx,50%) var(--my,50%),
+        rgba(1,169,130,0.08) 0%, transparent 70%);
+    }
+    .step-card:nth-child(2) .step-spotlight {
+      background: radial-gradient(circle 180px at var(--mx,50%) var(--my,50%),
+        rgba(0,200,255,0.07) 0%, transparent 70%);
+    }
+    .step-card:nth-child(3) .step-spotlight {
+      background: radial-gradient(circle 180px at var(--mx,50%) var(--my,50%),
+        rgba(118,48,234,0.07) 0%, transparent 70%);
+    }
+    .step-card:hover .step-spotlight { opacity: 1; }
+
+    /* Top shimmer bar */
+    .step-card-bar {
+      position: relative;
+      height: 3px;
+      z-index: 1;
+      background: linear-gradient(90deg, var(--hpe-green), var(--hpe-cyan));
+      overflow: hidden;
+    }
+    .step-card:nth-child(2) .step-card-bar {
+      background: linear-gradient(90deg, var(--hpe-cyan), var(--hpe-purple));
+    }
+    .step-card:nth-child(3) .step-card-bar {
+      background: linear-gradient(90deg, var(--hpe-purple), #c084fc);
+    }
+    .step-card-bar::after {
+      content: '';
+      position: absolute;
+      top: 0; left: -100%; width: 60%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
+      animation: barShimmer 3s ease-in-out infinite;
+    }
+    @keyframes barShimmer {
+      0%   { left: -100%; }
+      60%  { left: 160%; }
+      100% { left: 160%; }
+    }
+    .step-card:nth-child(2) .step-card-bar::after { animation-delay: 1s; }
+    .step-card:nth-child(3) .step-card-bar::after { animation-delay: 2s; }
+
+    /* Step number floating badge */
+    .step-num-badge {
+      position: absolute;
+      top: -1px; left: 24px;
+      z-index: 10;
+      width: 48px; height: 48px;
+      border-radius: 0 0 16px 16px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 15px;
+      font-weight: 800;
+      color: #000;
+      background: linear-gradient(160deg, var(--hpe-green), var(--hpe-cyan));
+      box-shadow: 0 8px 24px rgba(1,169,130,0.4);
+      transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), box-shadow 0.3s ease;
+    }
+    .step-card:nth-child(2) .step-num-badge {
+      background: linear-gradient(160deg, var(--hpe-cyan), var(--hpe-purple));
+      box-shadow: 0 8px 24px rgba(0,200,255,0.35);
+    }
+    .step-card:nth-child(3) .step-num-badge {
+      background: linear-gradient(160deg, var(--hpe-purple), #c084fc);
+      box-shadow: 0 8px 24px rgba(118,48,234,0.35);
+    }
+    .step-card:hover .step-num-badge {
+      transform: translateY(4px) scale(1.08);
+      box-shadow: 0 14px 32px rgba(1,169,130,0.5);
+    }
+    .step-card:nth-child(2):hover .step-num-badge {
+      box-shadow: 0 14px 32px rgba(0,200,255,0.4);
+    }
+    .step-card:nth-child(3):hover .step-num-badge {
+      box-shadow: 0 14px 32px rgba(118,48,234,0.4);
+    }
+
+    /* Image frame */
+    .step-img-frame {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      position: relative;
+      background: var(--surface);
+      cursor: zoom-in;
+      z-index: 1;
+    }
+    .step-img-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.6s cubic-bezier(0.22,1,0.36,1), filter 0.4s ease;
+      filter: brightness(0.92) saturate(1.1);
+    }
+    .step-card:hover .step-img-frame img {
+      transform: scale(1.07);
+      filter: brightness(1.02) saturate(1.15);
+    }
+
+    /* Zoom overlay */
+    .zoom-hint {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(5,8,16,0);
+      transition: background 0.35s ease;
+    }
+    .zoom-hint-icon {
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      background: rgba(5,8,16,0.7);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.18);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff;
+      opacity: 0;
+      transform: scale(0.6);
+      transition: all 0.35s cubic-bezier(0.22,1,0.36,1);
+    }
+    .step-img-frame:hover .zoom-hint { background: rgba(5,8,16,0.25); }
+    .step-img-frame:hover .zoom-hint-icon {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    /* Placeholder */
+    .step-img-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: repeating-linear-gradient(
+        45deg, transparent, transparent 12px,
+        rgba(255,255,255,0.01) 12px, rgba(255,255,255,0.01) 24px
+      );
+    }
+    .step-img-placeholder svg { opacity: 0.2; color: var(--muted); }
+    .step-img-placeholder span {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+      opacity: 0.35;
+    }
+
+    /* Card body */
+    .step-card-body {
+      padding: 20px 24px 28px;
+      position: relative;
+      z-index: 1;
+    }
+    .step-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--hpe-green);
+      background: rgba(1,169,130,0.08);
+      border: 1px solid rgba(1,169,130,0.2);
+      padding: 4px 12px;
+      border-radius: 100px;
+      margin-bottom: 14px;
+      transition: all 0.3s ease;
+    }
+    .step-card:hover .step-tag {
+      background: rgba(1,169,130,0.14);
+      border-color: rgba(1,169,130,0.35);
+    }
+    .step-card:nth-child(2) .step-tag {
+      color: var(--hpe-cyan);
+      background: rgba(0,200,255,0.07);
+      border-color: rgba(0,200,255,0.2);
+    }
+    .step-card:nth-child(2):hover .step-tag {
+      background: rgba(0,200,255,0.12);
+      border-color: rgba(0,200,255,0.35);
+    }
+    .step-card:nth-child(3) .step-tag {
+      color: #c084fc;
+      background: rgba(118,48,234,0.07);
+      border-color: rgba(118,48,234,0.2);
+    }
+    .step-tag-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: statusPulse 2s ease-in-out infinite;
+    }
+    .step-card:nth-child(3) .step-tag-dot { animation: none; }
+
+    .step-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.03em;
+      line-height: 1.3;
+      margin-bottom: 12px;
+      transition: color 0.3s ease;
+    }
+    .step-card:hover .step-title { color: #fff; }
+
+    .step-desc {
+      font-size: 13.5px;
+      color: var(--text-secondary);
+      line-height: 1.8;
+    }
+    .step-desc code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      background: rgba(0,200,255,0.08);
+      border: 1px solid rgba(0,200,255,0.2);
+      border-radius: 5px;
+      padding: 2px 7px;
+      color: var(--hpe-cyan);
+      white-space: nowrap;
+    }
+    .step-desc strong { color: var(--text); font-weight: 700; }
+    .step-desc .key-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      background: rgba(1,169,130,0.1);
+      border: 1px solid rgba(1,169,130,0.28);
+      border-radius: 5px;
+      padding: 2px 8px;
+      color: var(--hpe-green);
+      font-weight: 600;
+    }
+
+    /* ─── IMAGE LIGHTBOX ─────────────────────────────────────────────── */
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 9998;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.35s ease;
+    }
+    .lightbox.open { opacity: 1; pointer-events: all; }
+    .lightbox-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(5,8,16,0.94);
+      backdrop-filter: blur(20px);
+    }
+    .lightbox-img {
+      position: relative;
+      z-index: 1;
+      max-width: 90vw;
+      max-height: 85vh;
+      border-radius: 16px;
+      border: 1px solid var(--border-bright);
+      box-shadow: 0 40px 100px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.05);
+      transform: scale(0.88) translateY(20px);
+      transition: transform 0.45s cubic-bezier(0.22,1,0.36,1);
+      object-fit: contain;
+    }
+    .lightbox.open .lightbox-img { transform: scale(1) translateY(0); }
+    .lightbox-close {
+      position: absolute;
+      top: 24px; right: 24px;
+      z-index: 2;
+      width: 44px; height: 44px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid var(--border-bright);
+      color: var(--text);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .lightbox-close:hover {
+      background: rgba(255,255,255,0.14);
+      border-color: rgba(255,255,255,0.25);
+    }
+    .lightbox-label {
+      position: absolute;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      z-index: 2;
+      white-space: nowrap;
+      background: rgba(5,8,16,0.7);
+      padding: 6px 16px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+    }
+
+    /* ─── TOOLS SECTION ─────────────────────────────────────────────── */
+    .section {
+      position: relative;
+      z-index: 1;
+      padding: 100px 48px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .section-head {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+    .section-overline {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--hpe-green);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+    .section-overline::before,
+    .section-overline::after {
+      content: '';
+      width: 32px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--hpe-green));
+    }
+    .section-overline::after {
+      background: linear-gradient(90deg, var(--hpe-green), transparent);
+    }
+    .section-title {
+      font-size: clamp(32px, 4vw, 52px);
+      font-weight: 800;
+      letter-spacing: -0.035em;
+      line-height: 1.1;
+      margin-bottom: 16px;
+    }
+    .section-title em {
+      font-style: normal;
+      background: linear-gradient(135deg, var(--hpe-green), var(--hpe-cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .section-desc {
+      font-size: 16px;
+      color: var(--text-secondary);
+      max-width: 500px;
+      margin: 0 auto;
+      line-height: 1.7;
+    }
+
+    /* ─── TOOL CARDS ────────────────────────────────────────────────── */
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 20px;
+    }
+
+    .tool-card {
+      position: relative;
+      cursor: pointer;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      overflow: hidden;
+      transition: all 0.4s cubic-bezier(0.22,1,0.36,1);
+      transform-style: preserve-3d;
+      opacity: 0;
+      transform: translateY(40px);
+    }
+    .tool-card.visible {
+      animation: cardIn 0.7s cubic-bezier(0.22,1,0.36,1) forwards;
+    }
+    @keyframes cardIn {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .tool-card:nth-child(1) { animation-delay: 0s; }
+    .tool-card:nth-child(2) { animation-delay: 0.1s; }
+    .tool-card:nth-child(3) { animation-delay: 0.2s; }
+
+    .tool-card:hover {
+      transform: translateY(-8px) scale(1.01);
+      border-color: rgba(1,169,130,0.4);
+      box-shadow:
+        0 24px 60px rgba(0,0,0,0.5),
+        0 0 0 1px rgba(1,169,130,0.15);
+    }
+    .tool-card.card-cyan:hover {
+      border-color: rgba(0,200,255,0.4);
+      box-shadow:
+        0 24px 60px rgba(0,0,0,0.5),
+        0 0 0 1px rgba(0,200,255,0.15);
+    }
+    .tool-card.disabled:hover {
+      transform: translateY(-4px);
+      border-color: var(--border);
+      box-shadow: 0 12px 30px rgba(0,0,0,0.3);
+    }
+
+    .card-glow { display: none; }
+
+    .card-top-bar {
+      height: 3px;
+      background: linear-gradient(90deg, var(--hpe-green), var(--hpe-cyan));
+      border-radius: 16px 16px 0 0;
+    }
+    .tool-card.card-cyan .card-top-bar {
+      background: linear-gradient(90deg, var(--hpe-cyan), var(--hpe-purple));
+    }
+    .tool-card.disabled .card-top-bar {
+      background: var(--border);
+    }
+
+    .card-body { padding: 28px 28px 24px; }
+
+    .card-header-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .card-icon-wrap {
+      width: 56px; height: 56px;
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, rgba(1,169,130,0.2), rgba(1,169,130,0.05));
+      border: 1px solid rgba(1,169,130,0.2);
+      color: var(--hpe-green);
+      transition: all 0.3s ease;
+    }
+    .tool-card:hover .card-icon-wrap {
+      background: linear-gradient(135deg, rgba(1,169,130,0.3), rgba(1,169,130,0.1));
+      box-shadow: 0 0 24px rgba(1,169,130,0.25);
+      transform: scale(1.08);
+    }
+    .tool-card.card-cyan .card-icon-wrap {
+      background: linear-gradient(135deg, rgba(0,200,255,0.2), rgba(0,200,255,0.05));
+      border-color: rgba(0,200,255,0.2);
+      color: var(--hpe-cyan);
+    }
+    .tool-card.card-cyan:hover .card-icon-wrap {
+      background: linear-gradient(135deg, rgba(0,200,255,0.3), rgba(0,200,255,0.1));
+      box-shadow: 0 0 24px rgba(0,200,255,0.2);
+    }
+    .tool-card.disabled .card-icon-wrap {
+      background: rgba(255,255,255,0.04);
+      border-color: var(--border);
+      color: var(--muted);
+    }
+
+    .card-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 100px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .badge-active {
+      background: rgba(1,169,130,0.12);
+      border: 1px solid rgba(1,169,130,0.3);
+      color: var(--hpe-green);
+    }
+    .badge-soon {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .badge-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+    }
+    .badge-active .badge-dot { background: var(--hpe-green); animation: statusPulse 2s infinite; }
+    .badge-soon .badge-dot { background: var(--muted); }
+
+    .card-module-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .card-title {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: var(--text);
+      margin-bottom: 12px;
+      line-height: 1.2;
+    }
+    .card-desc {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+
+    .card-features {
+      margin-top: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .feature-tag {
+      padding: 4px 10px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--muted);
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: 0.04em;
+      transition: all 0.3s ease;
+    }
+    .tool-card:hover .feature-tag {
+      border-color: rgba(1,169,130,0.2);
+      color: var(--text-secondary);
+    }
+    .tool-card.card-cyan:hover .feature-tag {
+      border-color: rgba(0,200,255,0.2);
+    }
+
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+    .card-meta {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+    }
+    .card-arrow {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--muted);
+      transition: all 0.3s cubic-bezier(0.22,1,0.36,1);
+    }
+    .tool-card:not(.disabled):hover .card-arrow {
+      background: var(--hpe-green);
+      border-color: var(--hpe-green);
+      color: #000;
+      transform: translate(2px, -2px);
+      box-shadow: 0 8px 20px rgba(1,169,130,0.4);
+    }
+    .tool-card.card-cyan:hover .card-arrow {
+      background: var(--hpe-cyan);
+      border-color: var(--hpe-cyan);
+      box-shadow: 0 8px 20px rgba(0,200,255,0.3);
+    }
+
+    /* ─── FEATURE STRIPE ────────────────────────────────────────────── */
+    .feature-stripe {
+      position: relative;
+      z-index: 1;
+      padding: 0 48px 100px;
+    }
+    .feature-stripe-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+    }
+    .feature-item {
+      padding: 36px 32px;
+      border-right: 1px solid var(--border);
+      position: relative;
+      transition: background 0.4s ease;
+    }
+    .feature-item:last-child { border-right: none; }
+    .feature-item:hover { background: rgba(1,169,130,0.04); }
+    .feature-icon {
+      width: 42px; height: 42px;
+      border-radius: 10px;
+      background: rgba(1,169,130,0.1);
+      border: 1px solid rgba(1,169,130,0.2);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--hpe-green);
+      margin-bottom: 16px;
+      transition: all 0.3s ease;
+    }
+    .feature-item:hover .feature-icon {
+      background: rgba(1,169,130,0.18);
+      box-shadow: 0 0 20px rgba(1,169,130,0.2);
+    }
+    .feature-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+      letter-spacing: -0.02em;
+    }
+    .feature-desc {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* ─── FOOTER ────────────────────────────────────────────────────── */
+    .footer {
+      position: relative;
+      z-index: 1;
+      padding: 32px 48px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .footer-logo-dot {
+      width: 8px; height: 8px;
+      background: var(--hpe-green);
+      border-radius: 2px;
+    }
+    .footer-brand {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+    }
+    .footer-center {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+    }
+    .footer-right {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .footer-version {
+      padding: 3px 10px;
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      color: var(--hpe-green);
+    }
+
+    /* ─── TOAST ─────────────────────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: 36px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--panel);
+      border: 1px solid rgba(1,169,130,0.4);
+      border-radius: 12px;
+      padding: 14px 24px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text);
+      letter-spacing: 0.04em;
+      z-index: 9999;
+      white-space: nowrap;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(1,169,130,0.1);
+      backdrop-filter: blur(20px);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.3s cubic-bezier(0.22,1,0.36,1);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    #toast::before {
+      content: '';
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--hpe-green);
+      flex-shrink: 0;
+    }
+
+    /* ─── CURSOR GLOW ────────────────────────────────────────────────── */
+    .cursor-glow {
+      width: 400px; height: 400px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(1,169,130,0.06) 0%, transparent 70%);
+      position: fixed;
+      pointer-events: none;
+      z-index: 0;
+      transition: transform 0.15s ease;
+      transform: translate(-50%, -50%);
+    }
+
+    /* ─── SCROLL ANIMATIONS ─────────────────────────────────────────── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(32px);
+      transition: opacity 0.8s cubic-bezier(0.22,1,0.36,1), transform 0.8s cubic-bezier(0.22,1,0.36,1);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+  </style>
+</head>
+<body>
+
+<!-- Background layers -->
+<div class="aurora">
+  <div class="aurora-blob"></div>
+  <div class="aurora-blob"></div>
+  <div class="aurora-blob"></div>
+</div>
+<div class="grid-overlay"></div>
+<div class="noise"></div>
+<div class="cursor-glow" id="cursorGlow"></div>
+<canvas id="bg-canvas"></canvas>
+
+<!-- ── HEADER ───────────────────────────────────────────────────────── -->
+<header class="header" id="header">
+  <div class="logo-area">
+    <div class="hpe-badge">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z"/>
+      </svg>
+    </div>
+    <div class="logo-text-group">
+      <div class="logo-eyebrow">HPE GreenLake</div>
+      <div class="logo-name">Platform <em>Tools</em></div>
+    </div>
+  </div>
+  <nav class="header-nav">
+    <div class="nav-pill">
+      <div class="status-dot"></div>
+      All Systems Operational
+    </div>
+    <div class="nav-pill">v1.0.0 — LOCAL</div>
+  </nav>
+</header>
+
+<!-- ── HERO ─────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-overline">
+    <div class="hero-overline-dot"></div>
+    Internal Platform Utilities
+    <div class="hero-overline-dot"></div>
+  </div>
+  <h1 class="hero-title">
+    <span class="line-1">GreenLake</span>
+    <span class="line-2">Data Fetcher</span>
+    <span class="line-3">Tools</span>
+  </h1>
+  <p class="hero-sub">Internal utilities for querying, managing, and analyzing HPE GreenLake platform data. Precision-built for operations teams.</p>
+  <div class="hero-cta">
+    <a class="btn-primary" href="#tools" onclick="event.preventDefault(); document.getElementById('tools').scrollIntoView({behavior:'smooth'})">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      Explore Tools
+    </a>
+  </div>
+</section>
+
+<!-- ── STEPS GUIDE ────────────────────────────────────────────────────── -->
+<div class="steps-section reveal">
+  <div class="steps-wrapper">
+
+    <div class="steps-head">
+      <div class="steps-overline">How It Works</div>
+      <h2 class="steps-title">Get started in <em>3 simple steps</em></h2>
+      <p class="steps-subtitle">Follow the guide below to retrieve your authentication credentials from the GreenLake portal.</p>
+    </div>
+
+    <div class="steps-grid">
+
+      <!-- connector -->
+      <div class="steps-connector">
+        <div class="connector-line"></div>
+        <div class="connector-line"></div>
+      </div>
+
+      <!-- ── Step 1 ── -->
+      <div class="step-card">
+        <div class="step-spotlight"></div>
+        <div class="step-card-bar"></div>
+        <div class="step-img-frame" onclick="openLightbox('step1.png','Launch the HPE GreenLake CCS Support Portal')">
+          <img src="step1.png" alt="Launch GreenLake HPE CCS Support Portal"
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+          <div class="step-img-placeholder" style="display:none;">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            <span>step1.png</span>
+          </div>
+          <div class="zoom-hint">
+            <div class="zoom-hint-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="step-card-body">
+          <div class="step-tag"><div class="step-tag-dot"></div>Start Here</div>
+          <div class="step-title">Launch the HPE GreenLake CCS Support Portal</div>
+          <div class="step-desc">Open your browser and navigate to the <strong>HPE GreenLake CCS Support Portal</strong>. Make sure you are fully logged in before proceeding to the next step.</div>
+        </div>
+      </div>
+
+      <!-- ── Step 2 ── -->
+      <div class="step-card">
+        <div class="step-spotlight"></div>
+        <div class="step-card-bar"></div>
+        <div class="step-img-frame" onclick="openLightbox('step2.png','Open DevTools → Network Tab')">
+          <img src="step2.png" alt="Open Inspect Element and Network Tab"
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+          <div class="step-img-placeholder" style="display:none;">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            <span>step2.png</span>
+          </div>
+          <div class="zoom-hint">
+            <div class="zoom-hint-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="step-card-body">
+          <div class="step-tag"><div class="step-tag-dot"></div>DevTools</div>
+          <div class="step-title">Open Inspect Element &amp; Go to the Network Tab</div>
+          <div class="step-desc">
+            Press <strong>F12</strong> (or right-click → <strong>Inspect</strong>) to open DevTools. Click the <strong>Network</strong> tab, then type any <strong>random characters</strong> in the portal's search bar — this triggers a network request you need to capture.
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Step 3 ── -->
+      <div class="step-card">
+        <div class="step-spotlight"></div>
+        <div class="step-card-bar"></div>
+        <div class="step-num-badge">03</div>
+        <div class="step-img-frame" onclick="openLightbox('step3.png','Copy Authorization & Cookie headers')">
+          <img src="step3.png" alt="Copy Authorization and Cookie headers"
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+          <div class="step-img-placeholder" style="display:none;">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            <span>step3.png</span>
+          </div>
+          <div class="zoom-hint">
+            <div class="zoom-hint-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="step-card-body">
+          <div class="step-tag"><div class="step-tag-dot" style="animation:none;"></div>Copy Headers</div>
+          <div class="step-title">Find &amp; Copy Your Authorization and Cookie</div>
+          <div class="step-desc">
+            In the Network tab, look for a request named
+            <code>customers?limit=10&amp;offset</code> (Customers section) or
+            <code>devices?limit…</code> (Devices section).
+            Click it → open the <strong>Headers</strong> tab → find
+            <span class="key-tag">Authorization</span> and
+            <span class="key-tag">Cookie</span> — copy both values in full.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── LIGHTBOX ───────────────────────────────────────────────────────── -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <div class="lightbox-backdrop"></div>
+  <img class="lightbox-img" id="lightboxImg" src="" alt="" onclick="event.stopPropagation()" />
+  <div class="lightbox-close" onclick="closeLightbox()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </div>
+  <div class="lightbox-label" id="lightboxLabel"></div>
+</div>
+
+<!-- ── TOOLS SECTION ─────────────────────────────────────────────────── -->
+<section class="section" id="tools">
+  <div class="section-head reveal">
+    <div class="section-overline">Platform Modules</div>
+    <h2 class="section-title">Choose a <em>Tool</em></h2>
+    <p class="section-desc">Select a module below to launch the appropriate utility for your operational task.</p>
+  </div>
+
+  <div class="tools-grid">
+
+    <!-- Card 1: Device Management -->
+    <div class="tool-card" onclick="openTool('device')" id="tile-device">
+      <div class="card-glow"></div>
+      <div class="card-top-bar"></div>
+      <div class="card-body">
+        <div class="card-header-row">
+          <div class="card-icon-wrap">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <rect x="2" y="3" width="20" height="14" rx="2"/>
+              <path d="M8 21h8M12 17v4"/>
+              <path d="M7 8h4M7 11h2"/>
+            </svg>
+          </div>
+          <div class="card-badge badge-active">
+            <div class="badge-dot"></div>
+            Active
+          </div>
+        </div>
+        <div class="card-module-label">Module 01</div>
+        <div class="card-title">Device Management</div>
+        <div class="card-desc">Lookup devices by serial number or MAC address. Fetch platform IDs, folder assignments, and device metadata in bulk.</div>
+        <div class="card-features">
+          <span class="feature-tag">Serial Lookup</span>
+          <span class="feature-tag">MAC Address</span>
+          <span class="feature-tag">Bulk Export</span>
+          <span class="feature-tag">Platform IDs</span>
+        </div>
+        <div class="card-footer">
+          <div class="card-meta">greenlake.hpe.com / devices</div>
+          <div class="card-arrow">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 2: Subscription Management -->
+    <div class="tool-card card-cyan" id="tile-sub" onclick="openTool('sub')">
+      <div class="card-glow"></div>
+      <div class="card-top-bar"></div>
+      <div class="card-body">
+        <div class="card-header-row">
+          <div class="card-icon-wrap">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M20 12V22H4V12"/>
+              <path d="M22 7H2v5h20V7z"/>
+              <path d="M12 22V7"/>
+              <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/>
+              <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
+            </svg>
+          </div>
+          <div class="card-badge badge-active">
+            <div class="badge-dot"></div>
+            Active
+          </div>
+        </div>
+        <div class="card-module-label">Module 02</div>
+        <div class="card-title">Subscription Management</div>
+        <div class="card-desc">Query and manage GreenLake subscriptions, license keys, entitlements, and renewal data across accounts.</div>
+        <div class="card-features">
+          <span class="feature-tag">License Keys</span>
+          <span class="feature-tag">Entitlements</span>
+          <span class="feature-tag">Renewals</span>
+          <span class="feature-tag">Multi-Account</span>
+        </div>
+        <div class="card-footer">
+          <div class="card-meta">greenlake.hpe.com / subscriptions</div>
+          <div class="card-arrow">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 3: User Management (Coming Soon) -->
+    <div class="tool-card disabled" id="tile-user" onclick="openTool('user')">
+      <div class="card-glow"></div>
+      <div class="card-top-bar"></div>
+      <div class="card-body">
+        <div class="card-header-row">
+          <div class="card-icon-wrap">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </div>
+          <div class="card-badge badge-soon">
+            <div class="badge-dot"></div>
+            Coming Soon
+          </div>
+        </div>
+        <div class="card-module-label">Module 03</div>
+        <div class="card-title" style="opacity:0.5;">User & Account Management</div>
+        <div class="card-desc" style="opacity:0.5;">Manage platform users, roles, workspace access, and account-level configurations across your GreenLake tenant.</div>
+        <div class="card-features">
+          <span class="feature-tag" style="opacity:0.4;">User Roles</span>
+          <span class="feature-tag" style="opacity:0.4;">Workspace Access</span>
+          <span class="feature-tag" style="opacity:0.4;">Tenant Config</span>
+        </div>
+        <div class="card-footer">
+          <div class="card-meta" style="opacity:0.4;">In Development</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── FEATURE STRIP ─────────────────────────────────────────────────── -->
+<div class="feature-stripe reveal">
+  <div class="feature-stripe-inner">
+    <div class="feature-item">
+      <div class="feature-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+        </svg>
+      </div>
+      <div class="feature-name">Fast Queries</div>
+      <div class="feature-desc">Sub-second API calls against GreenLake platform endpoints.</div>
+    </div>
+    <div class="feature-item">
+      <div class="feature-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+      </div>
+      <div class="feature-name">Secure Access</div>
+      <div class="feature-desc">OAuth 2.0 token-based auth. No credentials stored locally.</div>
+    </div>
+    <div class="feature-item">
+      <div class="feature-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+      </div>
+      <div class="feature-name">Bulk Operations</div>
+      <div class="feature-desc">Process thousands of records in a single operation.</div>
+    </div>
+    <div class="feature-item">
+      <div class="feature-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+      </div>
+      <div class="feature-name">CSV Export</div>
+      <div class="feature-desc">Download results as structured CSV for further analysis.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── FOOTER ────────────────────────────────────────────────────────── -->
+<footer class="footer">
+  <div class="footer-left">
+    <div class="footer-logo-dot"></div>
+    <div class="footer-brand">HPE GreenLake Data Fetcher Tools — Internal Use Only</div>
+  </div>
+  <div class="footer-center">© 2026 Hewlett Packard Enterprise</div>
+  <div class="footer-right">
+    <span class="footer-version">v1.0.0</span>
+    LOCAL BUILD
+  </div>
+</footer>
+
+<!-- ── TOAST ─────────────────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<script>
+  /* ── Cursor glow ─────────────────────────────────────────── */
+  const glow = document.getElementById('cursorGlow');
+  document.addEventListener('mousemove', e => {
+    glow.style.left = e.clientX + 'px';
+    glow.style.top  = e.clientY + 'px';
+  });
+
+  /* ── Particle canvas ─────────────────────────────────────── */
+  const canvas = document.getElementById('bg-canvas');
+  const ctx    = canvas.getContext('2d');
+  let W, H, particles = [];
+
+  function resize() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  function mkParticle() {
+    return {
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: Math.random() * 1.5 + 0.3,
+      vx: (Math.random() - 0.5) * 0.2,
+      vy: -Math.random() * 0.3 - 0.05,
+      alpha: Math.random() * 0.5 + 0.1,
+      color: Math.random() > 0.6 ? '#01a982' : '#00c8ff'
+    };
+  }
+  for (let i = 0; i < 80; i++) particles.push(mkParticle());
+
+  function drawParticles() {
+    ctx.clearRect(0, 0, W, H);
+    particles.forEach((p, i) => {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = p.alpha;
+      ctx.fill();
+      p.x += p.vx; p.y += p.vy;
+      p.alpha -= 0.0008;
+      if (p.alpha <= 0 || p.y < -10) particles[i] = mkParticle();
+    });
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(drawParticles);
+  }
+  drawParticles();
+
+  /* ── Header scroll ───────────────────────────────────────── */
+  const header = document.getElementById('header');
+  window.addEventListener('scroll', () => {
+    header.classList.toggle('scrolled', window.scrollY > 40);
+  });
+
+  /* ── Scroll reveal ───────────────────────────────────────── */
+  const revealEls = document.querySelectorAll('.reveal');
+  const revealObs = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+  }, { threshold: 0.15 });
+  revealEls.forEach(el => revealObs.observe(el));
+
+  /* ── Card scroll reveal ──────────────────────────────────── */
+  const cards = document.querySelectorAll('.tool-card');
+  const cardObs = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+  }, { threshold: 0.1 });
+  cards.forEach(c => cardObs.observe(c));
+
+
+  /* ── 3D Tilt on cards ────────────────────────────────────── */
+  cards.forEach(card => {
+    if (card.classList.contains('disabled')) return;
+    card.addEventListener('mousemove', e => {
+      const rect = card.getBoundingClientRect();
+      const cx = rect.left + rect.width  / 2;
+      const cy = rect.top  + rect.height / 2;
+      const dx = (e.clientX - cx) / (rect.width  / 2);
+      const dy = (e.clientY - cy) / (rect.height / 2);
+      card.style.transform = `translateY(-8px) scale(1.01) perspective(800px) rotateY(${dx * 4}deg) rotateX(${-dy * 4}deg)`;
+    });
+    card.addEventListener('mouseleave', () => {
+      card.style.transform = '';
+    });
+  });
+
+  /* ── Step card spotlight + entrance ─────────────────────── */
+  const stepCards = document.querySelectorAll('.step-card');
+  const stepObs = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('step-visible'); });
+  }, { threshold: 0.15 });
+  stepCards.forEach(c => {
+    stepObs.observe(c);
+    const spotlight = c.querySelector('.step-spotlight');
+    if (!spotlight) return;
+    c.addEventListener('mousemove', e => {
+      const r = c.getBoundingClientRect();
+      const x = ((e.clientX - r.left) / r.width  * 100).toFixed(1) + '%';
+      const y = ((e.clientY - r.top)  / r.height * 100).toFixed(1) + '%';
+      spotlight.style.setProperty('--mx', x);
+      spotlight.style.setProperty('--my', y);
+    });
+  });
+
+  /* ── Lightbox ────────────────────────────────────────────── */
+  function openLightbox(src, label) {
+    const lb  = document.getElementById('lightbox');
+    const img = document.getElementById('lightboxImg');
+    const lbl = document.getElementById('lightboxLabel');
+    img.src = src;
+    img.alt = label;
+    lbl.textContent = label;
+    lb.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeLightbox() {
+    document.getElementById('lightbox').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+  /* ── Navigation ──────────────────────────────────────────── */
+  function openTool(tool) {
+    if (tool === 'device') {
+      window.location.href = '/DeviceManagement.html';
+    } else if (tool === 'sub') {
+      window.location.href = '/SubscriptionManagement.html';
+    } else {
+      showToast('This module is coming soon — stay tuned!');
+    }
+  }
+
+  /* ── Toast ───────────────────────────────────────────────── */
+  let toastTimer;
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+  }
+</script>
+
+</body>
+</html>
