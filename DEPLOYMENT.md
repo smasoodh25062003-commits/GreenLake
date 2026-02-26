@@ -100,9 +100,9 @@ All of these have a **free tier** suitable for a small Flask app. Your app calls
 3. **New → Web Service**, connect your repo.
 4. Settings:
    - **Build command:** `pip install -r requirements.txt`
-   - **Start command:** `gunicorn main:app` (add `gunicorn>=21.0.0` to `requirements.txt`)
-   - **Environment:** add `PORT` if needed; Render sets it. In `main.py` you can use:  
-     `port = int(os.environ.get('PORT', 5000))` and `app.run(host='0.0.0.0', port=port)` for local; for Render, use **Start command** `gunicorn -b 0.0.0.0:$PORT main:app`.
+   - **Start command:** If you use the repo’s **Procfile**, Render runs it automatically. Otherwise set:  
+     `gunicorn -b 0.0.0.0:$PORT main:app --timeout 300`  
+     (Add `gunicorn>=21.0.0` to `requirements.txt`. `--timeout 300` avoids worker timeout when subscription lookups run for many keys.)
 5. Deploy. You’ll get a URL like `https://your-app.onrender.com`.
 6. **Important:** In `DeviceManagement.html` (and any other HTML that calls the API), set the API base from the current page so it works on any host:
    ```javascript
